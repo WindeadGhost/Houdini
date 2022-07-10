@@ -4,11 +4,18 @@
 
 #define VERSION 0.1
 
+//----------
+//Btn manuel
+//----------
+const int btnPin = 26;
+int lastState = HIGH; // the previous state from the input pin
+int currentState;     // the current reading from the input pin
+
 //---------
 //CARTE SON
 //---------
-HardwareSerial mySoftwareSerial(1);
-DFRobotDFPlayerMini myDFPlayer ;
+HardwareSerial HardSerial(1);
+DFRobotDFPlayerMini myDFPlayer;
 
 //------
 //RELAIS
@@ -51,7 +58,7 @@ bool chapeau = false;
 
 void setup() {  
 
-  mySoftwareSerial.begin(9600, SERIAL_8N1, 16, 17); //speed, type, RX, TX
+  HardSerial.begin(9600, SERIAL_8N1, 16, 17); //speed, type, RX, TX
   
   Serial.begin(115200);
   Serial.println(F("=================================="));
@@ -84,15 +91,28 @@ void setup() {
   Serial.println(F("----------------------------------"));
   Serial.println("Initialisation du relais");
   pinMode(pinRelais, OUTPUT);
-
   digitalWrite(pinRelais, HIGH);
 
-  while (!myDFPlayer.begin(mySoftwareSerial)) {
+  pinMode(btnPin, INPUT);
+
+  /*while (!myDFPlayer.begin(HardSerial)) {
     Serial.println("Impossible de démarrer");
-  }
+  }*/
 }
 
-void loop() {  
+void loop() {
+
+  if (digitalRead(btnPin) == 1) {
+    unlock();
+  }
+  
+  /*if (lastState == HIGH && currentState == LOW) {
+    Serial.println("btn pressed");
+    unlock();
+  }*/
+
+  //lastState = currentState;
+  
   for (int reader = 0; reader < numberReaders; reader++) {
     if (errorFlag) {
       uint32_t irqStatus = nfc[reader].getIRQStatus();

@@ -3,7 +3,7 @@ Code de l'énigme 'HOUDINI' de l'escape game de LIMOGES
 
 ## PCB
 
-Dans le dossier PCB, nous pouvons trouver toutes les informations au sujet du circuit imprimé (Taille de la PCB, emplacement et référence des composants).
+Dans le dossier PCB, nous pouvons trouver toutes les informations au sujet du circuit imprimé (Taille de la PCB, emplacement et référence des composants).  
 <sub>Fichier BOM, PickAndPlace, et le Gerber</sub>
 
 ## Code présent dans le fichier .ino

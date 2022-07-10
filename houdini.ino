@@ -1,20 +1,42 @@
 #include <PN5180.h>
 #include <PN5180ISO15693.h>
+#include <DFRobotDFPlayerMini.h>
 
 #define VERSION 0.1
 
-const int trigPin = 21;
-const int echoPin = 4;
+//---------
+//CARTE SON
+//---------
+HardwareSerial mySoftwareSerial(1);
+DFRobotDFPlayerMini myDFPlayer ;
+
+//------
+//RELAIS
+//------
+const int pinRelais = 25;
+bool unlocked = false;
+
+//----------
+//CAPTEUR US
+//----------
+const int trigPin = 32;
+const int echoPin = 33;
 #define SOUND_SPEED 0.034
 long duration;
 float distanceCm;
+const int minDistance = 50;
+const int maxDistance = 150;
 
+
+//--------
+//LECTEURS
+//--------
 const int numberReaders = 2;
 
 //NSS - BUSY - RST
 PN5180ISO15693 nfc[] = {
-  PN5180ISO15693(16, 5, 17),
-  PN5180ISO15693(32, 33, 25)
+  PN5180ISO15693(2, 15, 4),
+  PN5180ISO15693(21, 5, 22)
 };
 
 uint8_t savedUid[][8] = {
@@ -28,6 +50,9 @@ bool veston = false;
 bool chapeau = false;
 
 void setup() {  
+
+  mySoftwareSerial.begin(9600, SERIAL_8N1, 16, 17); //speed, type, RX, TX
+  
   Serial.begin(115200);
   Serial.println(F("=================================="));
   Serial.println(F("Version du : " __DATE__ " " __TIME__));
@@ -35,11 +60,9 @@ void setup() {
   Serial.println(VERSION);
 
   for (int reader = 0; reader < numberReaders; reader++) {
-    if (reader == 0){
-      Serial.println(F("*** LECTEUR NUMERO 1 ***"));
-    } else if (reader == 1) {
-      Serial.println(F("*** LECTEUR NUMERO 2 ***"));
-    }
+    Serial.print(F("*** LECTEUR NUMERO "));
+    Serial.print(reader);
+    Serial.println(" ***");
     nfc[reader].begin();
 
     Serial.println(F("----------------------------------"));
@@ -57,16 +80,26 @@ void setup() {
   Serial.println("Initialisation capteur US");
   pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
   pinMode(echoPin, INPUT); // Sets the echoPin as an Input
+  
+  Serial.println(F("----------------------------------"));
+  Serial.println("Initialisation du relais");
+  pinMode(pinRelais, OUTPUT);
+
+  digitalWrite(pinRelais, HIGH);
+
+  while (!myDFPlayer.begin(mySoftwareSerial)) {
+    Serial.println("Impossible de démarrer");
+  }
 }
 
-void loop() {
+void loop() {  
   for (int reader = 0; reader < numberReaders; reader++) {
     if (errorFlag) {
       uint32_t irqStatus = nfc[reader].getIRQStatus();
       showIRQStatus(irqStatus);
 
-      nfc[reader].reset();
-      nfc[reader].setupRF();
+      /*nfc[reader].reset();
+      nfc[reader].setupRF();*/
 
       errorFlag = false;
     }
@@ -90,6 +123,8 @@ void loop() {
       } else if (reader == 1) {
         chapeau = false;
       }
+
+      unlocked = false;
     }
   }
 
@@ -100,9 +135,17 @@ void loop() {
   Serial.println(chapeau);
 
   if (veston == 1 && chapeau == 1) {
+    
     Serial.println("En attente du capteur US"); //US = Ultra Son
-    if (distance() == true) {
-      Serial.println("Déverrouillage");
+    myDFPlayer.setTimeOut(500);
+    myDFPlayer.volume(5) ; // fixe le son à 10 (maximum)
+    myDFPlayer.play(1); // Son : Mettez vous en place pour la photo...
+    
+    if (distance() == true && unlocked == false) {
+      //myDFPlayer.play(1); //Son : 3... 2... 1... 'son de photo'
+      unlock(); //Ouverture !
+    } else {
+      //unlocked = false;
     }
   }
 
@@ -113,7 +156,7 @@ bool compare(uint8_t currentUid[8], int j) {
     /*Serial.print(currentUid[7-i]);
     Serial.print(" : ");
     Serial.print(savedUid[j][i]);
-    Serial.print(" / ");*/
+    Serial.println(" / ");*/
     if (currentUid[7-i] == savedUid[j][i] && i == 7) {
       return true;
     }
@@ -139,47 +182,55 @@ bool distance() {
   Serial.print("Distance (cm): ");
   Serial.println(distanceCm);
 
-  if (distanceCm > 50 && distanceCm < 150) {
+  if (distanceCm > minDistance && distanceCm < maxDistance) {
     return true;
   }
 
   return false;
 }
 
+void unlock() {
+  digitalWrite(pinRelais, LOW);
+  unlocked = true;
+  delay(1000);
+  digitalWrite(pinRelais, HIGH);
+}
+
+
 void readInformation(int reader) {
   Serial.println(F("----------------------------------"));
-    Serial.println(F("Lecture de la version de production..."));
-    uint8_t productVersion[2];
-    nfc[reader].readEEprom(PRODUCT_VERSION, productVersion, sizeof(productVersion));
-    Serial.print(F("Version de production = "));
-    Serial.print(productVersion[1]);
-    Serial.print(".");
-    Serial.println(productVersion[0]);
+  Serial.println(F("Lecture de la version de production..."));
+  uint8_t productVersion[2];
+  nfc[reader].readEEprom(PRODUCT_VERSION, productVersion, sizeof(productVersion));
+  Serial.print(F("Version de production = "));
+  Serial.print(productVersion[1]);
+  Serial.print(".");
+  Serial.println(productVersion[0]);
 
-    if (0xff == productVersion[1]) { // if product version 255, the initialization failed
-      Serial.println(F("Echec de l'initialisation !?"));
-      Serial.println(F("Redémarrez l'ESP32..."));
-      Serial.flush();
-      exit(-1); // halt
-    }
+  if (0xff == productVersion[1]) { // if product version 255, the initialization failed
+    Serial.println(F("Echec de l'initialisation !?"));
+    Serial.println(F("Redémarrez l'ESP32..."));
+    Serial.flush();
+    exit(-1); // halt
+  }
   
-    Serial.println(F("----------------------------------"));
-    Serial.println(F("Lecture de la version du logiciel..."));
-    uint8_t firmwareVersion[2];
-    nfc[reader].readEEprom(FIRMWARE_VERSION, firmwareVersion, sizeof(firmwareVersion));
-    Serial.print(F("Version du logiciel = "));
-    Serial.print(firmwareVersion[1]);
-    Serial.print(".");
-    Serial.println(firmwareVersion[0]);
+  Serial.println(F("----------------------------------"));
+  Serial.println(F("Lecture de la version du logiciel..."));
+  uint8_t firmwareVersion[2];
+  nfc[reader].readEEprom(FIRMWARE_VERSION, firmwareVersion, sizeof(firmwareVersion));
+  Serial.print(F("Version du logiciel = "));
+  Serial.print(firmwareVersion[1]);
+  Serial.print(".");
+  Serial.println(firmwareVersion[0]);
 
-    Serial.println(F("----------------------------------"));
-    Serial.println(F("Lecture de la version de l'EEPROM..."));
-    uint8_t eepromVersion[2];
-    nfc[reader].readEEprom(EEPROM_VERSION, eepromVersion, sizeof(eepromVersion));
-    Serial.print(F("Version de l'EEPROM = "));
-    Serial.print(eepromVersion[1]);
-    Serial.print(".");
-    Serial.println(eepromVersion[0]);
+  Serial.println(F("----------------------------------"));
+  Serial.println(F("Lecture de la version de l'EEPROM..."));
+  uint8_t eepromVersion[2];
+  nfc[reader].readEEprom(EEPROM_VERSION, eepromVersion, sizeof(eepromVersion));
+  Serial.print(F("Version de l'EEPROM = "));
+  Serial.print(eepromVersion[1]);
+  Serial.print(".");
+  Serial.println(eepromVersion[0]);
 }
 
 void showIRQStatus(uint32_t irqStatus) {

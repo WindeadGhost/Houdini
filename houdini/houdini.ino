@@ -4,6 +4,12 @@
 
 #define VERSION 0.1
 
+//-----
+//DEBUG
+//-----
+
+bool debugMode = false;
+
 //-------------
 //BOUTON BYPASS
 //-------------
@@ -35,7 +41,7 @@ const int maxDistance = 150;
 //--------
 //LECTEURS
 //--------
-const int nbrLecteurs = 2;
+const int nbrLecteurs = 1;
 
 //La déclaration des pins se fait dans cet ordre : NSS - BUSY - RST
 PN5180ISO15693 nfc[] = {
@@ -53,8 +59,7 @@ bool veston = false;
 bool chapeau = false;
 
 
-void setup() {  
-
+void setup() {
   HardSerial.begin(9600, SERIAL_8N1, 16, 17); //vitesse, type, RX, TX
   
   Serial.begin(115200);
@@ -95,33 +100,39 @@ void setup() {
   Serial.println("Initialisation du bouton de Bypass");
   pinMode(boutonBypass, INPUT);
 
-  while (!myDFPlayer.begin(HardSerial)) {
+  /*while (!myDFPlayer.begin(HardSerial)) {
     Serial.println("Impossible de démarrer");
     delay(500);
+  }*/
+
+  if (digitalRead(boutonBypass) == 1 || true) {
+    debugMode = true;
   }
 }
 
 void loop() {
+  if (debugMode == true) {
+    debugLoop();
+  } else {
+    normalLoop();
+  }
+}
 
+void normalLoop() {
+  Serial.println("Mode normal");
+  
   if (digitalRead(boutonBypass) == 1) {
     unlock();
   }
 
   if (retourErreur) {
-    for (int lecteur = 0; lecteur < nbrLecteurs; lecteur++) {
-      uint32_t irqStatus = nfc[lecteur].getIRQStatus();
-      showIRQStatus(irqStatus);
-
-      /*nfc[lecteur].reset();
-      nfc[lecteur].setupRF();*/
-    }
-    
     retourErreur = false; 
   }
   
   for (int lecteur = 0; lecteur < nbrLecteurs; lecteur++) {
     uint8_t uid[8];
     ISO15693ErrorCode rc = nfc[lecteur].getInventory(uid);
+    
     if (ISO15693_EC_OK == rc) { //Si il n'y a aucune erreur
       if (compare(uid, lecteur) == true) { //Comparaison des uid connus avec celui qui est passé
         if (lecteur == 0) {
@@ -130,7 +141,6 @@ void loop() {
           chapeau = true;
         }
       }
-      
     } else { //Si il y a une erreur
       retourErreur = true; //On le signale
 
@@ -144,15 +154,7 @@ void loop() {
     }
   }
 
-  /*Serial.print("veston : ");
-  Serial.println(veston);
-
-  Serial.print("chapeau : ");
-  Serial.println(chapeau);*/
-
   if (veston == 1 && chapeau == 1) {
-    
-    Serial.println("En attente du capteur US"); //US = Ultra Son
     myDFPlayer.setTimeOut(500);
     myDFPlayer.volume(5) ; // fixe le son à 5 (10 maximum)
     myDFPlayer.play(1); // Son : Mettez vous en place pour la photo...
@@ -165,12 +167,81 @@ void loop() {
   }
 }
 
+void debugLoop() {
+  Serial.println("Mode debug");
+  
+  if (digitalRead(boutonBypass) == 1) {
+    Serial.println("BYPASS");
+    unlock();
+  }
+
+  if (retourErreur) {
+    for (int lecteur = 0; lecteur < nbrLecteurs; lecteur++) {
+      uint32_t irqStatus = nfc[lecteur].getIRQStatus();
+      showIRQStatus(irqStatus);
+
+      /*nfc[lecteur].reset();
+      nfc[lecteur].setupRF();*/
+    }
+    retourErreur = false; 
+  }
+  
+  for (int lecteur = 0; lecteur < nbrLecteurs; lecteur++) {
+    uint8_t uid[8];
+    ISO15693ErrorCode rc = nfc[lecteur].getInventory(uid);
+    
+    if (ISO15693_EC_OK == rc) { //Si il n'y a aucune erreur
+      Serial.println("Comparaison des uids...");
+      if (compare(uid, lecteur) == true) { //Comparaison des uid connus avec celui qui est passé
+        if (lecteur == 0) {
+          veston = true;
+        } else if (lecteur == 1){
+          chapeau = true;
+        }
+      }
+    } else { //Si il y a une erreur
+      retourErreur = true; //On le signale
+
+      if (lecteur == 0) {
+        veston = false;
+      } else if (lecteur == 1) {
+        chapeau = false;
+      }
+
+      unlocked = false;
+    }
+  }
+
+  Serial.print("veston : ");
+  Serial.println(veston);
+
+  Serial.print("chapeau : ");
+  Serial.println(chapeau);
+
+  if (veston == 1 && chapeau == 1) {
+    Serial.println("Veston et chapeau en place, en attente du capteur à ultrasons");
+    myDFPlayer.setTimeOut(500);
+    myDFPlayer.volume(5) ; // fixe le son à 5 (10 maximum)
+    myDFPlayer.play(1); // Son : Mettez vous en place pour la photo...
+    
+    if (distance() == true && unlocked == false) {
+      Serial.println("Coffre ouvert !");
+      //myDFPlayer.play(1); //Son : 3... 2... 1... 'son de photo'
+      unlock(); //Ouverture !
+    }
+    
+  }
+}
+
 bool compare(uint8_t currentUid[8], int j) {
   for(int i = 0; i < 8; i++) {
-    /*Serial.print(currentUid[7-i]);
-    Serial.print(" : ");
-    Serial.print(uidConnus[j][i]);
-    Serial.println(" / ");*/
+    if (debugMode == true) {
+      Serial.print(currentUid[7-i]);
+      Serial.print(":");
+      Serial.print(uidConnus[j][i]);
+      Serial.println(" / ");
+    }
+    
     if (currentUid[7-i] == uidConnus[j][i] && i == 7) {
       return true;
     }
@@ -191,10 +262,12 @@ bool distance() {
   
   // Calcul de la distance parcourue
   distanceCm = duree * SOUND_SPEED/2;
-  
-  Serial.print("Distance (cm): ");
-  Serial.println(distanceCm);
 
+  if (debugMode == true) {
+    Serial.print("Distance (cm): ");
+    Serial.println(distanceCm);
+  }
+  
   if (distanceCm > minDistance && distanceCm < maxDistance) { //Si la distance est comprise dans la plage choisie
     return true;
   }

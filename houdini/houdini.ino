@@ -2,12 +2,11 @@
 #include <PN5180ISO15693.h>
 #include <DFRobotDFPlayerMini.h>
 
-#define VERSION 0.1
+#define VERSION 1.0
 
 //-----
 //DEBUG
 //-----
-
 bool debugMode = false;
 
 //-------------
@@ -41,7 +40,7 @@ const int maxDistance = 150;
 //--------
 //LECTEURS
 //--------
-const int nbrLecteurs = 1;
+const int nbrLecteurs = 2;
 
 //La déclaration des pins se fait dans cet ordre : NSS - BUSY - RST
 PN5180ISO15693 nfc[] = {
@@ -100,13 +99,30 @@ void setup() {
   Serial.println("Initialisation du bouton de Bypass");
   pinMode(boutonBypass, INPUT);
 
-  /*while (!myDFPlayer.begin(HardSerial)) {
+  Serial.println(F("----------------------------------"));
+  Serial.println("Initialisation du lecteur son");
+  while (!myDFPlayer.begin(HardSerial)) {
     Serial.println("Impossible de démarrer");
     delay(500);
-  }*/
+  }
+  
+  Serial.println("Démarrage terminé");
 
+  Serial.println("Pour rentrer en mode Debogage");
+  Serial.println("Appuyez sur le bouton bypass");
+
+  for(int bp = 5; bp > 0; bp--) {
+    Serial.print(bp);
+    Serial.println("...");
+    delay(1000);
+  }
+  
   if (digitalRead(boutonBypass) == 1 || true) {
     debugMode = true;
+    Serial.println("MODE DEBUG ACTIF");
+    Serial.println("Pour quitter le mode debug");
+    Serial.println("Appuyez sur le bouton RESET");
+    delay(2000); //Pour éviter de débloquer le mécanisme lors du passage sur la boucle du programme
   }
 }
 
@@ -116,11 +132,11 @@ void loop() {
   } else {
     normalLoop();
   }
+
+  delay(1000); //Pour économiser des ressources et des cycles on met un delai 
 }
 
-void normalLoop() {
-  Serial.println("Mode normal");
-  
+void normalLoop() {  
   if (digitalRead(boutonBypass) == 1) {
     unlock();
   }
@@ -156,20 +172,17 @@ void normalLoop() {
 
   if (veston == 1 && chapeau == 1) {
     myDFPlayer.setTimeOut(500);
-    myDFPlayer.volume(5) ; // fixe le son à 5 (10 maximum)
+    myDFPlayer.volume(1) ; // fixe le son à 5 (10 maximum)
     myDFPlayer.play(1); // Son : Mettez vous en place pour la photo...
     
     if (distance() == true && unlocked == false) {
-      //myDFPlayer.play(1); //Son : 3... 2... 1... 'son de photo'
+      myDFPlayer.play(1); //Son : 3... 2... 1... 'son de photo'
       unlock(); //Ouverture !
     }
-    
   }
 }
 
 void debugLoop() {
-  Serial.println("Mode debug");
-  
   if (digitalRead(boutonBypass) == 1) {
     Serial.println("BYPASS");
     unlock();
@@ -221,12 +234,12 @@ void debugLoop() {
   if (veston == 1 && chapeau == 1) {
     Serial.println("Veston et chapeau en place, en attente du capteur à ultrasons");
     myDFPlayer.setTimeOut(500);
-    myDFPlayer.volume(5) ; // fixe le son à 5 (10 maximum)
+    myDFPlayer.volume(1) ; // fixe le son à 5 (10 maximum)
     myDFPlayer.play(1); // Son : Mettez vous en place pour la photo...
     
     if (distance() == true && unlocked == false) {
       Serial.println("Coffre ouvert !");
-      //myDFPlayer.play(1); //Son : 3... 2... 1... 'son de photo'
+      myDFPlayer.play(1); //Son : 3... 2... 1... 'son de photo'
       unlock(); //Ouverture !
     }
     
